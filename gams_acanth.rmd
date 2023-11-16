@@ -1,0 +1,264 @@
+---
+title: "gams_acanth"
+author: "user"
+date: "March 8, 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.height = 4, fig.width = 6)
+
+### load the tidyverse packages
+if (!require("tidyverse")) install.packages("tidyverse"); library(tidyverse)
+
+if (!require("tidymv")) install.packages("tidymv"); library(tidymv)
+
+### load the "mgcv" package for fitting GAMs
+if (!require("mgcv")) install.packages("mgcv"); library(mgcv)
+
+### load the "dismo" package, which has a bunch of helper functions for SDMs
+if (!require("dismo")) install.packages("dismo"); library(dismo)
+
+if (!require("RVAideMemoire")) install.packages("RVAideMemoire"); library(RVAideMemoire)
+
+if (!require("ggplot2")) install.packages("ggplot2"); library(ggplot2)
+
+if (!require("itsadug")) install.packages("itsadug"); library(itsadug)
+
+theme_set(theme_bw())
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+abs_file_path <- "C:/Users/Richard/Desktop/AcanthData/"
+data_all <- read.csv(paste(abs_file_path, "GAM_acanthPerit_woMilk.csv", sep = ""), fileEncoding="UTF-8-BOM")
+datFrame <- data.frame("day" = data_all$day, "atos" = data_all$atos, "age" = data_all$age, "ap" = data_all$perit, "sex" = as.factor(data_all$sex), "year" = data_all$year, "fat" = data_all$fat, "crab" = data_all$crabFood, "teeth" = data_all$teeth,  "food" = data_all$food, "crabby" = data_all$crabby, "enso" = data_all$enso, "ensoLag" = data_all$ensoLag)
+datFrame2 <- data.frame("day" = data_all$day, "atos" = data_all$atos, "age" = data_all$age, "ap" = data_all$perit, "sex" = as.factor(data_all$sex), "year" = data_all$year)
+dat <- na.omit(datFrame)
+dat2 <- na.omit(datFrame2)
+dat <- mutate(dat, oFat = ordered(fat, levels = c(4,3,2,1,0)))
+
+dat <- mutate(dat, oSex = ordered(sex, levels = c('F','M')))
+dat2 <- mutate(dat2, oSex = ordered(sex, levels = c('F','M')))
+dat <- mutate(dat, oAge = ordered(age, levels = c(2,3,4,5,6)))
+#dat2 <- mutate(dat, oAge = ordered(age, levels = c(2,3,4,5,6)))
+dat <- mutate(dat, oCrab = ordered(crab, levels = c(0,1)))
+dat <- mutate(dat, oTeeth = ordered(teeth, levels = c(1,2,3,4)))
+dat2$category <- cut(dat2$atos, 
+                   breaks=c(-Inf, 200, 500, 700, 1000, Inf), 
+                   labels=c("North","Monterey Bay","Big Sur", "Morro Bay", "South"))
+dat$category <- cut(dat$atos, 
+                   breaks=c(-Inf, 200, 500, 700, 1000, Inf), 
+                   labels=c("North","Monterey Bay","Big Sur", "Morro Bay", "South"))
+summary(dat)
+
+loessData <- read.csv(paste(abs_file_path, "loessBirds.csv", sep = ""), fileEncoding="UTF-8-BOM")
+```
+```{r trial Gam}
+
+data("pois_df")
+pois_gam <- gam(y ~ s(x, by = fac), data = pois_df, family = poisson)
+
+summary(pois_gam)
+
+plot_smooths(pois_gam, x, fac, transform = exp, series_length = 70) +
+  theme(legend.position = "top")
+
+```
+
+
+```{r seasonal Gam}
+
+practice_gam <- gam(ap ~ s(day) + s(day, by=category), data = dat2, 
+  family = binomial(link = "logit")
+)
+
+gam.check(practice_gam)
+linkinv2 <- practice_gam$family$linkinv
+
+summary(practice_gam)
+xLabels <- c("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D")
+
+png(file="C:/Users/Richard/Desktop/AcanthData/Figures/gam_ap_category.png",
+width=1200, height=900)
+
+plot_smooths(practice_gam, day, category, transform = linkinv2, conditions=quos(category %in% c("Monterey Bay", "Morro Bay")),) + theme(legend.position = "top") +  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+  xlab("Month") + ylab("AP Prevalence") + 
+  scale_x_continuous(breaks = c(1,32,60, 91, 121,152,182,213,244,274,305,335),
+                     labels = xLabels, limits = c(1,365), expand = c(0, 0)) +
+  theme(axis.text=element_text(size=40),
+        axis.title=element_text(size=14,face="bold"), 
+        legend.text=element_text(size=40))
+
+#conditions=quos(category %in% c("Monterey Bay", "Morro Bay")),
+
+
+dev.off()
+
+
+```
+
+
+```{r new Gam}
+
+#new_gam <- gam(ap ~ s(atos) + s(day) + s(age,k=5) + s(atos, by=oSex) + s(day, by=oSex), data = dat2, 
+#  family = binomial(link = "logit")
+#)
+temp_gam <- gam(ap ~ s(atos) + s(day) + s(atos, by=oSex) + s(day, by=oSex) + s(age, k=5) + s(age, k=5, by=oSex), data=dat2,family=binomial(link="logit"))
+
+gam.check(temp_gam)
+#linkinv2 <- temp_gam$family$linkinv
+
+#png("C:/Users/Richard/Desktop/AcanthData/Figures/gam_ap_shift%1d.png", width=720, 
+#    height=720, pointsize=24)
+#plot(new_gam, trans=linkinv2, scheme=1, shift=-1.2, ylim=c(0,.5))
+#dev.off()
+
+#linkinv <- temp_gam$family$linkinv
+#png(file="C:/Users/Richard/Desktop/AcanthData/Figures/gam_age_sex.png",width=1200, height=900)
+#plot(temp_gam, trans=linkinv, scheme=1, shift = 0, ylim=c(0,1))
+#plot_smooths(temp_gam, age, oSex, transform = linkinv) + theme(legend.position = "top") +  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+ # panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+ # xlab("Age") + ylab("AP Prevalence") +
+ # theme(axis.text=element_text(size=40),
+  #      axis.title=element_text(size=14,face="bold"), 
+  #      legend.text=element_text(size=40))
+#dev.off()
+summary(temp_gam)
+
+
+```
+```{r fisher}
+fisher.bintest(oCrab~oAge, dat)
+```
+
+
+
+
+
+```{r pressure, echo=FALSE}
+acanth_gam <- gam(
+  ap ~ s(atos) + s(age,k=5) + s(day) + s(atos, by=oCrab) + s(day, by=oCrab) + s(atos, by=oTeeth) + s(day, by=oTeeth), 
+  data = dat, 
+  family = binomial(link = "logit")
+)
+
+plot(acanth_gam, scheme=1)
+```
+
+```{r ap enso}
+enso_gam <- gam(
+  ap ~  s(ensoLag) + s(ensoLag, by=category), 
+  data = dat, 
+  family = binomial(link = "logit")
+)
+
+plot(enso_gam, scheme=1)
+
+```
+
+```{r plot, echo=FALSE}
+gam.check(enso_gam)
+linkinv <- enso_gam$family$linkinv
+plot(enso_gam, trans=linkinv, scheme=1, fillcolor='mediumpurple4')
+summary(enso_gam)
+
+```
+
+```{r crab}
+
+xLabels <- c(1992,1996,2000, 2004, 2008,2012,2016,2020)
+#xLabels <- c("J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D")
+
+crab_gam <- gam(
+  crabby ~  s(year) + s(year, by=category) + s(ensoLag) + s(ensoLag, by=category),
+  data = dat, 
+  family = binomial(link = "logit")
+)
+
+gam.check(crab_gam)
+linkinv <- crab_gam$family$linkinv
+png(file="C:/Users/Richard/Desktop/AcanthData/Figures/gam_crabby_year_loc_enso.png",width=1200, height=900)
+#plot(crab_gam, trans=linkinv, scheme=1, shift = 0, ylim=c(0,1))
+plot_smooths(crab_gam, year, category, transform = linkinv, conditions=quos(category %in% c("Monterey Bay", "Morro Bay")),) + theme(legend.position = "top") +
+#plot_smooths(crab_gam, day, oAge, transform = linkinv) + theme(legend.position = "top") +
+  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+  xlab("Month") + ylab("Crab Prevalence") + 
+  scale_x_continuous(breaks = c(1992,1996,2000, 2004, 2008,2012,2016,2020),
+                     labels = xLabels, limits = c(1992,2021), expand = c(0, 0)) +
+  #scale_x_continuous(breaks = c(1,32,60, 91, 121,152,182,213,244,274,305,335),
+                    #labels = xLabels, limits = c(1,365), expand = c(0, 0))
+  theme(axis.text=element_text(size=40),
+        axis.title=element_text(size=14,face="bold"), 
+        legend.text=element_text(size=40))
+dev.off()
+summary(crab_gam)
+
+
+
+```
+```{r}
+
+png(file="C:/Users/Richard/Desktop/AcanthData/Figures/gam_crab.png",
+width=1200, height=900)
+plot(crab_gam, trans=linkinv, scheme=1, cex.axis=2.5)
+dev.off()
+
+```
+
+
+
+```{r loess}
+
+
+
+mydata1<-predict(loess(loessData$gravid ~ loessData$Week, span = .4), se=T)
+mydata <- as.data.frame(mydata1)
+
+top <- mydata$fit + qt(0.975,mydata$df)*mydata$se
+bottom <- mydata$fit - qt(0.975,mydata$df)*mydata$se
+
+
+
+
+xLabels <- c(1, 13, 26, 39, 52)
+
+ggplot(loessData, aes(x = Week, y = gravid)) + geom_point() +
+  geom_line(aes(y = mydata$fit, color="mean"), size=2, show.legend = FALSE) +
+  geom_line(aes(y = bottom, color="mean"), linetype="solid", alpha=0.4, show.legend = FALSE) +
+  geom_line(aes(y = top, color="mean"), linetype="solid", alpha=0.4, show.legend = FALSE) +
+  geom_ribbon(aes(ymin=bottom,ymax=top), fill="mediumpurple4", alpha=0.3) +
+  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+  xlab("Week") + ylab("Abundance") + 
+  scale_x_continuous(breaks = c(1,13,26, 39, 52),
+                     labels = xLabels, limits = c(1,52), expand = c(0, 0)) +
+  theme(axis.text=element_text(size=40),
+        axis.title=element_text(size=14,face="bold")) + 
+  scale_color_manual(values = c("mediumpurple4" )) +
+  coord_cartesian(ylim = c(0,.6))
+
+ggsave(
+  "C:/Users/Richard/Desktop/AcanthData/Figures/loess_gravidCrab.png",
+  plot = last_plot(),
+  device = NULL,
+  path = NULL,
+  scale = 1,
+  width = 12,
+  height = 8,
+  units = "in",
+  dpi = 600,
+  limitsize = TRUE,
+  bg = NULL
+)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

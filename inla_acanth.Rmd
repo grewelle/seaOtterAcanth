@@ -1,0 +1,155 @@
+---
+title: "acanth_inla"
+author: "user"
+date: "February 28, 2022"
+output: html_document
+---
+#cadetblue4
+#darkgreen
+#mediumpurple4
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(devtools)
+library(INLA)
+library(INLAutils)
+library(Rgraphviz)
+library(ggplot2)
+library(Hmisc)
+```
+
+
+
+```{r test}
+abs_file_path <- "C:/Users/Richard/Desktop/GlucoseLimitation/"
+#data_all <- read.csv(paste(abs_file_path, "yearlyPerit.csv", sep = ""), fileEncoding="UTF-8-BOM")
+data_all <- read.csv(paste(abs_file_path, "absorbanceTimeSeries.csv", sep = ""), fileEncoding="UTF-8-BOM")
+summary(data_all)
+
+
+#dat.rw1 <- inla(abund_crab_resid ~ 1 + f(year_crab_resid, model = "rw1", constr = FALSE,
+#    hyper = list(prec = list(param = c(1, .5)))), data = data_all,
+#  control.predictor = list(compute = TRUE),
+#  control.compute = list(dic = TRUE, waic = TRUE, cpo = TRUE),
+#  control.family = list(hyper = list(prec = list(param = c(1, .5))))
+#)
+#summary(dat.rw1)
+
+dat.rw1 <- inla(inrange ~ 1 + f(day, model = "rw1", constr = FALSE,
+    hyper = list(prec = list(param = c(1, .2)))), data = data_all,
+  control.predictor = list(compute = TRUE),
+  control.compute = list(dic = TRUE, waic = TRUE, cpo = TRUE),
+  control.family = list(hyper = list(prec = list(param = c(1, .2))))
+)
+summary(dat.rw1)
+
+
+```
+
+```{r kendall}
+north <- c(1.011334062,	0.228447311,	0.317598246,	0.858453054,	1.587906619,	0.586198891,	1.237476612,	0.912425965,	0.965132916,	0.355321961,	0.568200016,	0.402446401,	0.336324163,	0.259882956,	0.35282764)
+south <- c(0.1303313,	0.074578289,	0.082979071,	0.12329124,	0.175305883,	0.122440199,	0.129662098,	0.122102556,	0.098268272,	0.086312938,	0.112414844,	0.116096294,	0.104590763,	0.093178522,	0.125101746)
+
+ty <- data_all$Hour
+absorbance <- data_all$Absorbance12
+
+
+cor.test(ty, absorbance, alternative = "less", method="kendall")
+#cor.test(data_all$day, data_all$inrange, alternative = "greater", method="kendall")
+
+```
+
+```{r plotting}
+
+
+mydata <- as.data.frame(dat.rw1$summary.fitted.values)
+xLabels <- c(1992, 1998, 2004, 2010, 2016)
+
+ggplot(mydata, aes(x = seq(1992, 2021, length.out = 30))) +
+  geom_line(aes(y = `mean`, color="mean"), size=2, show.legend = FALSE) +
+  geom_line(aes(y = `0.025quant`, color="mean"), linetype="solid", alpha=0.4, show.legend = FALSE) +
+  geom_line(aes(y = `0.975quant`, color="mean"), linetype="solid", alpha=0.4, show.legend = FALSE) +
+  geom_hline(aes(yintercept=mean(data_all$prevalence)), color="black", linetype="dashed", size=2) +
+  geom_ribbon(aes(ymin=`0.025quant`,ymax=`0.975quant`), fill="mediumpurple4", alpha=0.3) +
+  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+  ggtitle("All Otter AP") +
+  xlab("Year") + ylab("Prevalence") + 
+  scale_x_continuous(breaks = c(1992,1998,2004, 2010, 2016),
+                     labels = xLabels, limits = c(1992,2021), expand = c(0, 0)) +
+  theme(axis.text=element_text(size=40),
+        axis.title=element_text(size=14,face="bold")) + 
+  scale_color_manual(values = c("mediumpurple4" ))
+
+ggsave(
+  "C:/Users/Richard/Desktop/AcanthData/Figures/inla_all.png",
+  plot = last_plot(),
+  device = NULL,
+  path = NULL,
+  scale = 1,
+  width = 12,
+  height = 8,
+  units = "in",
+  dpi = 600,
+  limitsize = TRUE,
+  bg = NULL
+)
+#p <- autoplot(dat.rw1)
+#p[[4]] + geom_line(size = 1.3) #+ geom_hline(mean(data_all$prevalence))
+
+
+```
+
+
+```{r linePlot}
+x <- data_all$year_scoter_all
+y <- data_all$abund_scoter_all
+
+err <- data_all$se_scoter_all
+
+
+
+png(file="C:/Users/Richard/Desktop/AcanthData/Figures/err_scoter.png",
+width=600, height=350)
+errbar(x, y, y + err, y - err, type="b", ylim = c(0,150))
+dev.off()
+
+
+```
+```{r glucose}
+
+
+mydata <- as.data.frame(dat.rw1$summary.fitted.values)
+xLabels <- c("Mar", "Apr", "May", "Jun", "Jul")
+
+ggplot(mydata, aes(x = data_all$day)) +
+  geom_line(aes(y = `mean`, color="mean"), size=2, show.legend = FALSE) +
+  geom_line(aes(y = `0.025quant`, color="mean"), linetype="solid", alpha=0.4, show.legend = FALSE) +
+  geom_line(aes(y = `0.975quant`, color="mean"), linetype="solid", alpha=0.4, show.legend = FALSE) +
+  geom_hline(aes(yintercept=mean(data_all$inrange)), color="black", linetype="dashed", size=2) +
+  geom_ribbon(aes(ymin=`0.025quant`,ymax=`0.975quant`), fill="mediumpurple4", alpha=0.3) +
+  theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) +
+  ggtitle("In Range Glucose") +
+  xlab("Month") + ylab("In Range Glucose") + 
+  scale_x_continuous(breaks = c(0,30,60, 90, 120),
+                     labels = xLabels, limits = c(0,131), expand = c(0, 0)) +
+  theme(axis.text=element_text(size=40),
+        axis.title=element_text(size=14,face="bold")) + 
+  scale_color_manual(values = c("mediumpurple4" ))
+
+ggsave(
+  "C:/Users/Richard/Desktop/glucos_inrange.png",
+  plot = last_plot(),
+  device = NULL,
+  path = NULL,
+  scale = 1,
+  width = 12,
+  height = 8,
+  units = "in",
+  dpi = 600,
+  limitsize = TRUE,
+  bg = NULL
+)
+
+```
